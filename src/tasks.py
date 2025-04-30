@@ -5,6 +5,8 @@ from datetime import datetime
 # File path for task storage
 DEFAULT_TASKS_FILE = "tasks.json"
 
+import logging
+
 def load_tasks(file_path=DEFAULT_TASKS_FILE):
     """
     Load tasks from a JSON file.
@@ -19,11 +21,12 @@ def load_tasks(file_path=DEFAULT_TASKS_FILE):
         with open(file_path, "r") as f:
             return json.load(f)
     except FileNotFoundError:
-        return []
+        logging.error(f"File not found: {file_path}. Returning empty task list.")
+        return []  
     except json.JSONDecodeError:
-        # Handle corrupted JSON file
-        print(f"Warning: {file_path} contains invalid JSON. Creating new tasks list.")
-        return []
+        logging.error(f"Error decoding JSON in file: {file_path}. File may be corrupted.")
+        return []  
+
 
 def save_tasks(tasks, file_path=DEFAULT_TASKS_FILE):
     """
@@ -33,8 +36,13 @@ def save_tasks(tasks, file_path=DEFAULT_TASKS_FILE):
         tasks (list): List of task dictionaries
         file_path (str): Path to save the JSON file
     """
-    with open(file_path, "w") as f:
-        json.dump(tasks, f, indent=2)
+    try:
+        with open(file_path, "w") as f:
+            json.dump(tasks, f, indent=2)
+    except OSError as e:
+        logging.error(f"Failed to write to file {file_path}. Error: {e}")
+        raise 
+
 
 def generate_unique_id(tasks):
     """
@@ -46,9 +54,12 @@ def generate_unique_id(tasks):
     Returns:
         int: A unique ID for a new task
     """
-    if not tasks:
-        return 1
-    return max(task["id"] for task in tasks) + 1
+    valid_ids = [task["id"] for task in tasks if isinstance(task.get("id"), int)]
+    
+    if not valid_ids:
+        return 1 
+    return max(valid_ids) + 1
+
 
 def filter_tasks_by_priority(tasks, priority):
     """
@@ -123,3 +134,13 @@ def get_overdue_tasks(tasks):
         if not task.get("completed", False) and 
            task.get("due_date", "") < today
     ]
+
+def sort_tasks_by_created_time(tasks, order="desc"):
+    reverse = order == "desc"
+    return sorted(tasks, key=lambda x: datetime.strptime(x.get("created_at", "1970-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S"), reverse=reverse)
+
+def filter_tasks_by_completion(tasks, show_completed=True):
+    if show_completed:
+        return tasks
+    return [task for task in tasks if not task.get("completed", False)]
+

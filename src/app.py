@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from tasks import load_tasks, save_tasks, filter_tasks_by_priority, filter_tasks_by_category
+from tasks import load_tasks, save_tasks, filter_tasks_by_priority, filter_tasks_by_category, sort_tasks_by_created_time, filter_tasks_by_completion
 
 def main():
     st.title("To-Do Application")
@@ -20,22 +20,24 @@ def main():
         task_category = st.selectbox("Category", ["Work", "Personal", "School", "Other"])
         task_due_date = st.date_input("Due Date")
         submit_button = st.form_submit_button("Add Task")
+        show_completed = st.sidebar.checkbox("Show Completed Tasks", value=True)
+
         
         if submit_button and task_title:
             new_task = {
-                "id": len(tasks) + 1,
-                "title": task_title,
-                "description": task_description,
-                "priority": task_priority,
-                "category": task_category,
-                "due_date": task_due_date.strftime("%Y-%m-%d"),
-                "completed": False,
-                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
+            "id": max([task["id"] for task in tasks], default=0) + 1,
+            "title": task_title,
+            "description": task_description,
+            "priority": task_priority,
+            "category": task_category,
+            "due_date": task_due_date.strftime("%Y-%m-%d"),
+            "completed": False,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+}
             tasks.append(new_task)
             save_tasks(tasks)
             st.sidebar.success("Task added successfully!")
-    
+        
     # Main area to display tasks
     st.header("Your Tasks")
     
@@ -45,9 +47,8 @@ def main():
         filter_category = st.selectbox("Filter by Category", ["All"] + list(set([task["category"] for task in tasks])))
     with col2:
         filter_priority = st.selectbox("Filter by Priority", ["All", "High", "Medium", "Low"])
-    
-    show_completed = st.checkbox("Show Completed Tasks")
-    
+
+
     # Apply filters
     filtered_tasks = tasks.copy()
     if filter_category != "All":
@@ -56,6 +57,16 @@ def main():
         filtered_tasks = filter_tasks_by_priority(filtered_tasks, filter_priority)
     if not show_completed:
         filtered_tasks = [task for task in filtered_tasks if not task["completed"]]
+    
+    sort_by_time = st.selectbox("Sort by Creation Time", ["Newest First", "Oldest First"])
+  
+    if sort_by_time == "Newest First":
+        filtered_tasks = sort_tasks_by_created_time(filtered_tasks, order="desc")
+    else:
+        filtered_tasks = sort_tasks_by_created_time(filtered_tasks, order="asc")
+        
+    filtered_tasks = filter_tasks_by_completion(filtered_tasks, show_completed=show_completed)
+
     
     # Display tasks
     for task in filtered_tasks:
@@ -74,6 +85,13 @@ def main():
                         t["completed"] = not t["completed"]
                         save_tasks(tasks)
                         st.rerun()
+            if st.button("Crucial" if not task.get("crucial", False) else "Unmark", key=f"crucial_{task['id']}"):
+                for t in tasks:
+                    if t["id"] == task["id"]:
+                        t["crucial"] = not t.get("crucial", False)
+                        save_tasks(tasks)
+                        st.rerun()
+
             if st.button("Delete", key=f"delete_{task['id']}"):
                 tasks = [t for t in tasks if t["id"] != task["id"]]
                 save_tasks(tasks)
